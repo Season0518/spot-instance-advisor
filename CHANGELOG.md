@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **STS token credentials**: temporary AccessKeys now work. Pass `--securityToken`, or set `ALIYUN_SECURITY_TOKEN` / `ALIBABA_CLOUD_SECURITY_TOKEN` next to the matching AccessKey env vars. Before this, the token was ignored and STS keys were rejected by the API. This also makes the env vars exported by `aliyun/configure-aliyun-credentials-action` (GitHub Actions OIDC) work as-is.
+  - An env token is only paired with the AccessKey from the same source, and AccessKey flags only use `--securityToken`, so a long-term key never picks up a token an earlier CI step exported.
+- **OIDC credentials (AssumeRoleWithOIDC)**: `--roleArn` / `--oidcProviderArn` / `--oidcTokenFile` (plus optional `--roleSessionName`), or the standard `ALIBABA_CLOUD_ROLE_ARN` / `ALIBABA_CLOUD_OIDC_PROVIDER_ARN` / `ALIBABA_CLOUD_OIDC_TOKEN_FILE` env vars. This works in GitHub Actions and in ACK RRSA pods with no long-lived secret. A missing token file or an incomplete OIDC configuration fails fast with a clear error.
+
+### Changed
+
+- The ECS client is built from an SDK credentials provider (`NewClientWithOptions`) instead of `NewClientWithAccessKey`. For AccessKey credentials it is the same provider and config the old constructor created internally, so AccessKey usage, precedence (flags > `ALIYUN_*` > `ALIBABA_CLOUD_*`) and the "Missing required parameters" error are unchanged. The error message now also mentions the OIDC options.
+
+---
+
 ## [1.2.0] - 2026-08-24
 
 ### Added

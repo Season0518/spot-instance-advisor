@@ -2,17 +2,25 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strings"
 
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	ecsService "github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 )
 
 var (
 	accessKeyId     = flag.String("accessKeyId", "", "Your accessKeyId of cloud account (or set ALIYUN_ACCESS_KEY_ID)")
 	accessKeySecret = flag.String("accessKeySecret", "", "Your accessKeySecret of cloud account (or set ALIYUN_ACCESS_KEY_SECRET)")
+	securityToken   = flag.String("securityToken", "", "STS security token, for temporary AccessKeys (or set ALIYUN_SECURITY_TOKEN / ALIBABA_CLOUD_SECURITY_TOKEN)")
+	roleArn         = flag.String("roleArn", "", "OIDC: RAM role ARN to assume (or set ALIBABA_CLOUD_ROLE_ARN)")
+	oidcProviderArn = flag.String("oidcProviderArn", "", "OIDC: RAM OIDC identity provider ARN (or set ALIBABA_CLOUD_OIDC_PROVIDER_ARN)")
+	oidcTokenFile   = flag.String("oidcTokenFile", "", "OIDC: path to a file holding the OIDC ID token (or set ALIBABA_CLOUD_OIDC_TOKEN_FILE)")
+	roleSessionName = flag.String("roleSessionName", "", "OIDC: session name of the assumed role (or set ALIBABA_CLOUD_ROLE_SESSION_NAME; default spot-instance-advisor)")
 	region          = flag.String("region", "cn-hangzhou", "The region of spot instances")
 	cpu             = flag.Int("mincpu", 1, "Min cores of spot instances")
 	memory          = flag.Int("minmem", 2, "Min memory of spot instances")
@@ -34,13 +42,27 @@ func main() {
 		fail("Invalid parameters", err)
 	}
 
-	accessKeyID, secret := resolveCredentials(*accessKeyId, *accessKeySecret)
-	if accessKeyID == "" || secret == "" {
-		fail("Missing required parameters",
-			fmt.Errorf("accessKeyId and accessKeySecret are required (pass as flags or set ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET env vars)"))
+	credConfig, err := resolveCredentialConfig(credentialFlags{
+		accessKeyID:     *accessKeyId,
+		accessKeySecret: *accessKeySecret,
+		securityToken:   *securityToken,
+		roleArn:         *roleArn,
+		oidcProviderArn: *oidcProviderArn,
+		oidcTokenFile:   *oidcTokenFile,
+		roleSessionName: *roleSessionName,
+	})
+	if errors.Is(err, errMissingCredentials) {
+		fail("Missing required parameters", err)
+	} else if err != nil {
+		fail("Invalid credentials configuration", err)
 	}
 
-	client, err := ecsService.NewClientWithAccessKey(*region, accessKeyID, secret)
+	credProvider, err := buildCredentialsProvider(credConfig)
+	if err != nil {
+		fail("Invalid credentials configuration", err)
+	}
+
+	client, err := newECSClient(*region, credProvider)
 	if err != nil {
 		fail("Failed to create ecs client", err)
 	}
@@ -61,6 +83,13 @@ func main() {
 	sortedInstancePrices := metastore.SpotPricesAnalysis(historyPrices, *jsonOutput)
 
 	metastore.PrintPriceRank(sortedInstancePrices, *cutoff, *limit, *jsonOutput)
+}
+
+// newECSClient builds the ECS client that signs every request with creds.
+// sdk.NewConfig() is the config NewClientWithAccessKey uses internally, so an
+// AccessKey provider here behaves exactly like the pre-STS/OIDC client.
+func newECSClient(region string, creds credentials.CredentialsProvider) (*ecsService.Client, error) {
+	return ecsService.NewClientWithOptions(region, sdk.NewConfig(), creds)
 }
 
 // resolveCredentials picks credentials from explicit flags first, then from

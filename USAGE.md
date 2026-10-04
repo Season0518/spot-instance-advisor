@@ -8,9 +8,24 @@ Spot Instance Advisor 是一个用于分析阿里云 Spot 实例价格和可用�
 
 ### 基本参数
 
-- `--accessKeyId`: 阿里云访问密钥 ID
-- `--accessKeySecret`: 阿里云访问密钥 Secret
+- `--accessKeyId`: 阿里云访问密钥 ID（或环境变量 `ALIYUN_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_ID`）
+- `--accessKeySecret`: 阿里云访问密钥 Secret（或环境变量 `ALIYUN_ACCESS_KEY_SECRET` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET`）
+- `--securityToken`: STS 安全令牌，配合临时 AccessKey 使用（或环境变量 `ALIYUN_SECURITY_TOKEN` / `ALIBABA_CLOUD_SECURITY_TOKEN`）
+- `--roleArn`: OIDC：要扮演的 RAM 角色 ARN（或环境变量 `ALIBABA_CLOUD_ROLE_ARN`）
+- `--oidcProviderArn`: OIDC：RAM OIDC 身份提供商 ARN（或环境变量 `ALIBABA_CLOUD_OIDC_PROVIDER_ARN`）
+- `--oidcTokenFile`: OIDC：OIDC ID Token 文件路径（或环境变量 `ALIBABA_CLOUD_OIDC_TOKEN_FILE`）
+- `--roleSessionName`: OIDC：角色会话名（或环境变量 `ALIBABA_CLOUD_ROLE_SESSION_NAME`；默认 `spot-instance-advisor`）
 - `--region`: 区域（默认：cn-hangzhou）
+
+### 认证方式
+
+支持三种凭证，原有的 AccessKey 用法保持不变：
+
+1. **AccessKey（长期密钥）**：`--accessKeyId` + `--accessKeySecret`，或对应环境变量。
+2. **STS Token（临时密钥）**：在 AccessKey 基础上再提供 `--securityToken`，或 `ALIBABA_CLOUD_ACCESS_KEY_ID` / `ALIBABA_CLOUD_ACCESS_KEY_SECRET` / `ALIBABA_CLOUD_SECURITY_TOKEN` 环境变量（`aliyun/configure-aliyun-credentials-action` 导出的就是这组变量）。环境变量里的 Token 只与同一来源的 AccessKey 配对：`ALIYUN_SECURITY_TOKEN` 对应 `ALIYUN_ACCESS_KEY_*`，`ALIBABA_CLOUD_SECURITY_TOKEN` 对应 `ALIBABA_CLOUD_ACCESS_KEY_*`；通过参数传入的 AccessKey 只会使用 `--securityToken`。
+3. **OIDC（AssumeRoleWithOIDC）**：提供 `--roleArn` + `--oidcProviderArn` + `--oidcTokenFile`，或对应的 `ALIBABA_CLOUD_*` 环境变量（ACK RRSA 会自动注入这组变量）。工具用 OIDC Token 换取 RAM 角色的 STS 凭证，无需保存长期密钥。可通过 `ALIBABA_CLOUD_STS_REGION` / `ALIBABA_CLOUD_VPC_ENDPOINT_ENABLED` 指定 STS 地域或 VPC 接入点。
+
+优先级：AccessKey 参数 > OIDC 参数 > AccessKey 环境变量（`ALIYUN_*` 优先于 `ALIBABA_CLOUD_*`）> OIDC 环境变量。同时传入 AccessKey 参数和 OIDC 参数会直接报错。GitHub Actions 的配置示例见 [README](README.md#github-actions-with-oidc)。
 
 ### 实例筛选参数
 
